@@ -18,19 +18,19 @@ function parseBuffer(packet, buffer){
 	currentOffset += packet.packetSignatureLength;
 	packet.sequenceId = buffer.readUInt16LE(currentOffset);
 	currentOffset += 2;
-	if(packet.is_connect() || packet.is_syn()) {
+	if(packet.isConnect() || packet.is_syn()) {
 		packet.connectionSignature = buffer.slice(currentOffset, currentOffset + packet.connectionSignatureLength);
 		currentOffset += packet.connectionSignatureLength;
-	} else if (packet.is_data()) {
+	} else if (packet.isData()) {
 		packet.fragmentID = buffer.readUInt8(currentOffset++);
 	}
-
-	if(packet.has_flag_has_size()) {
+	
+	if(packet.hasFlagHasSize()) {
 		packet.payloadSize = buffer.readUInt16LE(currentOffset);
 		currentOffset += 2;
 		packet.payload = buffer.slice(currentOffset, packet.payloadSize + currentOffset);
 		currentOffset += packet.payloadSize;
-	} else if (packet.is_data()  && !packet.has_flag_ack()) {
+	} else if (packet.isData()  && !packet.hasFlagHack()) {
 		packet.payloadSize = buffer.length - currentOffset - 1;
 		packet.payload = buffer.slice(currentOffset, packet.payloadSize + currentOffset);
 		currentOffset += packet.payloadSize;
@@ -46,7 +46,7 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 	* Creates an instance of a PRUDPPacket version 0
 	* @param {(String|Buffer)} [buffer] 
 	*/
-	PRUDPPacketVersion0(buffer) {
+	constructor(buffer) {
 		super(0);
 		this.implementsChecksum = true;
 		this.connectionSignatureLength = 4;
@@ -59,11 +59,87 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 				parseBuffer(this, buffer);
 			} 
 		}
-		
-		
 	}
-
-	toBuffer() {
+	
+	/**
+	* Serializes the instance of PRUDPPacket to a buffer
+	* @param {Number} [maxPacketSize=500]
+	* @returns {Buffer}
+	*/
+	toBuffer(maxPacketSize = 500) {
+		const buffer = Buffer.alloc(maxPacketSize);
+		let currentOffset = 0;
+		buffer.writeUInt8(this.channels.source, currentOffset++);
+		buffer.writeUInt8(this.channels.destination, currentOffset++);
+		const type_flags = (this.flags << 4) | this.type;
+		buffer.writeUInt16LE(type_flags, currentOffset);
+		currentOffset += 2;
+		buffer.writeUInt8(this.sessionId, currentOffset++);
+		this.packetSignature.copy(buffer, currentOffset);
+		currentOffset += this.packetSignatureLength;
+		buffer.writeUInt16LE(this.sequenceId, currentOffset);	
+		currentOffset += 2;
 		
+		if(this.isConnect() || this.is_syn()) {
+			this.connectionSignature.copy(buffer, currentOffset);
+			currentOffset += this.connectionSignatureLength;
+		} else if(this.isData()) {
+			buffer.writeUInt8(this.fragmentID, currentOffset++);
+		}
+		
+		if((this.isData() && !this.hasFlagHack()) || this.hasFlagHasSize()) {
+			let size = this.payloadSize;
+			if(this.hasFlagHasSize()) {
+				buffer.writeUInt16LE(this.payloadSize, currentOffset);
+				currentOffset += 0x02;
+			} else {
+				size = this.payload === null ? 0 : buffer.length;
+			} 
+			this.payload.copy(buffer, currentOffset);
+			currentOffset += size;
+		}
+		buffer.writeUInt8(this.checksum, currentOffset++);
+		return buffer.slice(0, currentOffset);
+	}
+	
+	/**
+	* Sets the checksum of the packet
+	* @param {(String|Buffer|Number)} key the key used to hash the packet
+	*/
+	setChecksum(key) {
+		let number = 0;
+		if(typeof key === 'String') {
+			key = Buffer.from(key);
+		} 
+		if (key instanceof Buffer) {
+			key = key.reduce((a, b) => { return a + b; });
+		}
+		if(typeof key === 'number') {
+			number = key & 0xFF;
+		} else {
+			throw new Error('Invalid key format to create checksum');
+		}
+		let buffer = this.toBuffer();
+		buffer = buffer.slice(0, buffer.length - 1);
+		const length = buffer.length;
+		const tuple = [];
+		let pos = 0;
+		let sum = 0;
+		const words = Math.floor(length/4);
+		for (let i = 0; i < Math.floor(length/4); i++) {
+			sum += buffer.readUInt32LE(i * 4, true);
+		}
+		sum = (sum & 0xFFFFFFFF) >>> 0;
+		key += buffer.subarray(-((length & 3) >>> 0)).reduce((a, b) => {
+			return a + b;
+		}, 0);
+		
+		const buff = Buffer.alloc(4);
+		buff.writeUInt32LE(sum, 0);
+		key += buff.reduce((a, b) => { return a + b; }, 0);
+		
+		return (key & 0xFF) >>> 0;
 	}
 }
+
+module.exports = PRUDPPacketVersion0;

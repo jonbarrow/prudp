@@ -7,6 +7,21 @@
 const TYPES = require('./types/packet.types');
 const FLAGS = require('./types/flag.types');*/
 
+const TYPES = {
+	SYN: 0,
+	CONNECT: 1,
+	DATA: 2,
+	DISCONNECT: 3,
+	PING: 4
+};
+const FLAGS = {
+	ACK: 1,
+	RELIABLE: 2,
+	NEED_ACK: 4,
+	HAS_SIZE: 8,
+	MULTI_ACK: 200
+};
+
 /**
  * Class that represents a PRUDP packet
  */
@@ -50,19 +65,19 @@ class PRUDPPacket {
 	 * Sets the type of the packet
 	 * @param {Number} type the type that the packet will be set to
 	 */
-	set_type() {
-		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
+	set_type(type) {
+		this.type = type;
 	}
 
 	is_syn() {
 		return this.is_type(TYPES.SYN);
 	}
 
-	is_connect() {
+	isConnect() {
 		return this.is_type(TYPES.CONNECT);
 	}
 
-	is_data() {
+	isData() {
 		return this.is_type(TYPES.DATA);
 	}
 
@@ -102,7 +117,7 @@ class PRUDPPacket {
 		this.flags &= ~flag;
 	}
 
-	has_flag_ack() {
+	hasFlagHack() {
 		return this.has_flag(FLAGS.ACK);
 	}
 	has_flag_reliable() {
@@ -111,7 +126,7 @@ class PRUDPPacket {
 	has_flag_need_ack() {
 		return this.has_flag(FLAGS.NEED_ACK);
 	}
-	has_flag_has_size() {
+	hasFlagHasSize() {
 		return this.has_flag(FLAGS.HAS_SIZE);
 	}
 	has_flag_multi_ack() {
@@ -153,6 +168,17 @@ class PRUDPPacket {
 		return checksum;
 	}
 
+	static isHex(str) {
+		return /^([0-9A-Fa-f]{2})+$/.test(str);
+	}
+
+	/**
+	 * Sets the checksum of the packet
+	 * @param {(String|Buffer|Number)} key the key used to hash the packet
+	 */
+	setChecksum(key) {
+		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
+	}
 
 	/**
 	 * Converts the object to a string(debug/visual)
@@ -170,10 +196,6 @@ class PRUDPPacket {
 		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
 	}
 
-	static isHex(str) {
-		return /^([0-9A-Fa-f]{2})+$/.test(str);
-	}
-	
 	/**
 	 * Parses a given string of buffer to an instance of PRUDPacket
 	 * @param {Buffer|String} raw the buffer or string from which the packet will be parsed
@@ -194,7 +216,7 @@ class PRUDPPacket {
 		} else if(buffer[0] === 0xEA && buffer[1] === 0xD0) {
 			return buffer[2];
 		}
-		throw new PRUDPPacketError('Invalid packet structure');
+		throw new Error('Invalid packet structure');
 	}
 
 }
