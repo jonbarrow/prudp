@@ -228,7 +228,7 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 	static isBufferVersion0(buffer) {
 		const source = buffer.readUInt8(0);
 		const destination = buffer.readUInt8(1);
-		if(source >= 0xA1 && source <= 0xAF && destination >= 0xA1 && destination <= 0xAF ) 
+		if(source >= 0xA0 && source <= 0xAF && destination >= 0xA0 && destination <= 0xAF ) 
 			return true;
 		return false;
 	}
