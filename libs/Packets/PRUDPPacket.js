@@ -57,7 +57,7 @@ class PRUDPPacket {
 	 * @param {Number} type the type to check agaisnt
 	 * @return {Boolean} returns true if the packet matches the specified type
 	 */
-	is_type(type) {
+	isType(type) {
 		return this.type === type;
 	}
 
@@ -65,28 +65,28 @@ class PRUDPPacket {
 	 * Sets the type of the packet
 	 * @param {Number} type the type that the packet will be set to
 	 */
-	set_type(type) {
+	setType(type) {
 		this.type = type;
 	}
 
-	is_syn() {
-		return this.is_type(TYPES.SYN);
+	isSyn() {
+		return this.isType(TYPES.SYN);
 	}
 
 	isConnect() {
-		return this.is_type(TYPES.CONNECT);
+		return this.isType(TYPES.CONNECT);
 	}
 
 	isData() {
-		return this.is_type(TYPES.DATA);
+		return this.isType(TYPES.DATA);
 	}
 
-	is_ping() {
-		return this.is_type(TYPES.PING);
+	isPing() {
+		return this.isType(TYPES.PING);
 	}
 
-	is_disconnect() {
-		return this.is_type(TYPES.DISCONNECT);
+	isDisconnect() {
+		return this.isType(TYPES.DISCONNECT);
 	}
 	//#endregion packet type methods
 
@@ -105,7 +105,7 @@ class PRUDPPacket {
 	 * Sets a flag in the packet
 	 * @param {Number} flag the flag to add to the packet 
 	 */
-	set_flag(flag) {
+	setFlag(flag) {
 		this.flags |= flag;
 	}
 
@@ -117,56 +117,23 @@ class PRUDPPacket {
 		this.flags &= ~flag;
 	}
 
-	hasFlagHack() {
+	hasFlagAck() {
 		return this.has_flag(FLAGS.ACK);
 	}
-	has_flag_reliable() {
+	hasFlagReliable() {
 		return this.has_flag(FLAGS.RELIABLE);
 	}
-	has_flag_need_ack() {
+	hasFlagNeedAck() {
 		return this.has_flag(FLAGS.NEED_ACK);
 	}
 	hasFlagHasSize() {
 		return this.has_flag(FLAGS.HAS_SIZE);
 	}
-	has_flag_multi_ack() {
+	hasFlagMultiAck() {
 		return this.has_flag(FLAGS.MULTI_ACK);
 	}
 
 	//#endregion packet has flag methods
-
-
-	calc_checksum(checksum, packet) { //TODO?
-		const tuple = [];
-		let pos = 0;
-
-		for (let i=0;i<this.constructor.FloorDiv(packet.length, 4);i++) {
-			tuple.push(packet.readUInt32LE(pos, true));
-			pos += 4;
-		}
-
-		const sum = tuple.reduce((a, b) => {
-			return a + b;
-		}, 0);
-		const temp = (sum & 0xFFFFFFFF) >>> 0;
-
-		checksum += packet.subarray(-((packet.length & 3) >>> 0)).reduce((a, b) => {
-			return a + b;
-		}, 0);
-
-		const buff = Buffer.alloc(4);
-		buff.writeUInt32LE(temp, 0);
-
-		checksum += buff.reduce((a, b) => {
-			return a + b;
-		}, 0);
-
-		checksum = (checksum & 0xFF) >>> 0;
-
-		console.log(checksum);
-
-		return checksum;
-	}
 
 	static isHex(str) {
 		return /^([0-9A-Fa-f]{2})+$/.test(str);
@@ -197,6 +164,27 @@ class PRUDPPacket {
 	}
 
 	/**
+	 * Creates an ack packet(if necessary) for this packet
+	 * @param {Object} options Options for creating a packet
+	 * @param {?Buffer} options.connectionSignature the connection signature for the syn packet ack, if null generate a random signature
+	 * @param {?Buffer} options.packetSignaturethe packet signature for the connect packet ack, if null generate a random signature
+	 * @param {?Number} options.sessionId the sessionID for every packet except SYN
+	 * @returns {PRUDPPacketVersion0} if the packet doesn't have the NeedAck flag returns null
+	 * otherwise returns the created packet
+	 */
+	createAck(options) {
+		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
+	}
+
+	/**
+	 * Creates a packet of type syn
+	 * @returns {PRUDPPacket} the created Packet
+	 */
+	static createSyn() {
+		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
+	}
+
+	/**
 	 * Parses a given string of buffer to an instance of PRUDPacket
 	 * @param {Buffer|String} raw the buffer or string from which the packet will be parsed
 	 * @returns {PRUDPPacket} returns an object that represents the 
@@ -219,6 +207,9 @@ class PRUDPPacket {
 		throw new Error('Invalid packet structure');
 	}
 
-}
 
+
+}
+PRUDPPacket.TYPES = TYPES;
+PRUDPPacket.FLAGS = FLAGS;
 module.exports = PRUDPPacket;

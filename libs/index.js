@@ -1,5 +1,6 @@
-const Packets = require('./Packets')
-
+const Packets = require('./Packets');
+const PRUDP = require('./prudp');
 module.exports = {
-	Packets: Packets
+	Packets: Packets,
+	PRUDP: PRUDP
 };

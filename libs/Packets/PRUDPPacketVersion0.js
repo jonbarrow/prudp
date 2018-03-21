@@ -1,5 +1,5 @@
 const PRUDPPacket = require('./PRUDPPacket');
-
+const crypto = require('crypto');
 /**
 * Deserializes a packet 
 * @param {PRUDPPacket} packet The prudppacket instance where to read the buffer to
@@ -18,7 +18,7 @@ function parseBuffer(packet, buffer){
 	currentOffset += packet.packetSignatureLength;
 	packet.sequenceId = buffer.readUInt16LE(currentOffset);
 	currentOffset += 2;
-	if(packet.isConnect() || packet.is_syn()) {
+	if(packet.isConnect() || packet.isSyn()) {
 		packet.connectionSignature = buffer.slice(currentOffset, currentOffset + packet.connectionSignatureLength);
 		currentOffset += packet.connectionSignatureLength;
 	} else if (packet.isData()) {
@@ -30,7 +30,7 @@ function parseBuffer(packet, buffer){
 		currentOffset += 2;
 		packet.payload = buffer.slice(currentOffset, packet.payloadSize + currentOffset);
 		currentOffset += packet.payloadSize;
-	} else if (packet.isData()  && !packet.hasFlagHack()) {
+	} else if (packet.isData()  && !packet.hasFlagAck()) {
 		packet.payloadSize = buffer.length - currentOffset - 1;
 		packet.payload = buffer.slice(currentOffset, packet.payloadSize + currentOffset);
 		currentOffset += packet.payloadSize;
@@ -49,16 +49,20 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 	constructor(buffer) {
 		super(0);
 		this.implementsChecksum = true;
+		this.packetSignature = Buffer.alloc(this.packetSignatureLength);
+		this.packetSignature.fill(0)
+		this.connectionSignature = Buffer.alloc(this.connectionSignatureLength);
+		this.connectionSignature.fill(0)
 		this.connectionSignatureLength = 4;
 		this.packetSignatureLength = 4;
-		if(buffer != undefined && buffer !== null) {
+		if(buffer !== undefined && buffer !== null) {
 			if(typeof buffer === 'String' && PRUDPPacket.isHex(buffer)) {
 				buffer = Buffer.from(buffer, 'hex');
 			}
 			if(buffer instanceof Buffer) {
 				parseBuffer(this, buffer);
 			} 
-		}
+		} 
 	}
 	
 	/**
@@ -80,14 +84,14 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 		buffer.writeUInt16LE(this.sequenceId, currentOffset);	
 		currentOffset += 2;
 		
-		if(this.isConnect() || this.is_syn()) {
+		if(this.isConnect() || this.isSyn()) {
 			this.connectionSignature.copy(buffer, currentOffset);
 			currentOffset += this.connectionSignatureLength;
 		} else if(this.isData()) {
 			buffer.writeUInt8(this.fragmentID, currentOffset++);
 		}
 		
-		if((this.isData() && !this.hasFlagHack()) || this.hasFlagHasSize()) {
+		if((this.isData() && !this.hasFlagAck()) || this.hasFlagHasSize()) {
 			let size = this.payloadSize;
 			if(this.hasFlagHasSize()) {
 				buffer.writeUInt16LE(this.payloadSize, currentOffset);
@@ -108,7 +112,7 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 	*/
 	setChecksum(key) {
 		let number = 0;
-		if(typeof key === 'String') {
+		if(typeof key === 'string') {
 			key = Buffer.from(key);
 		} 
 		if (key instanceof Buffer) {
@@ -131,15 +135,102 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 		}
 		sum = (sum & 0xFFFFFFFF) >>> 0;
 		for(let i = words * 4; i < length; ++i) {
-			key += buffer[i];
+			key += buffer.readUInt8(i);
 		}
 
 		
 		const buff = Buffer.alloc(4);
 		buff.writeUInt32LE(sum, 0);
 		key += buff.reduce((a, b) => { return a + b; });
+		this.checksum = (key & 0xFF) >>> 0;
+	}
+	
+	/**
+	 * Creates an ack packet(if necessary) for this packet
+	 * @param {Object} options Options for creating a packet
+	 * @param {?Buffer} options.connectionSignature the connection signature for the syn packet ack, if null generate a random signature
+	 * @param {?Buffer} options.packetSignaturethe packet signature for the connect packet ack, if null generate a random signature
+	 * @param {?Number} options.sessionId the sessionID for every packet except SYN
+	 * @returns {PRUDPPacketVersion0} if the packet doesn't have the NeedAck flag returns null
+	 * otherwise returns the created packet
+	 */
+	createAck(options) {
+		if(!this.hasFlagNeedAck())
+			return undefined;
+		if (options == null) {
+			options = {};
+		}
+		const ack = new PRUDPPacketVersion0();
+		let hasSessionId = options.sessionId != null;
+		ack.setType(this.type);
+		ack.setFlag(PRUDPPacket.FLAGS.ACK);
+		ack.channels.destination = this.channels.source;
+		ack.channels.source = this.channels.destination;
+		ack.sequenceId = this.sequenceId;
 		
-		return (key & 0xFF) >>> 0;
+		if(this.isSyn()) {
+			ack.setFlag(PRUDPPacket.FLAGS.HAS_SIZE);
+			ack.sessionId = options.sessionId;			
+			if(options.connectionSignature == null) {
+				options.connectionSignature = crypto.randomBytes(this.connectionSignatureLength);
+			}
+			if(options.connectionSignature.length !== this.connectionSignatureLength) {
+				throw new Error('Invalid connection signature length');
+			}
+			ack.connectionSignature = options.connectionSignature;
+		} else if(hasSessionId) {
+			ack.sessionId = options.sessionId;			
+			if (this.isConnect()) {
+				ack.setFlag(PRUDPPacket.FLAGS.HAS_SIZE);	
+				if(options.packetSignature == null) {
+					options.packetSignature = crypto.randomBytes(this.packetSignatureLength);
+				}
+				if(options.packetSignature.length !== this.packetSignatureLength) {
+					throw new Error('Invalid packet signature length');
+				}			
+				ack.packetSignature = options.packetSignature;
+			} else if (this.isData()) {
+				ack.setFlag(PRUDPPacket.FLAGS.HAS_SIZE);
+				const packetSignature = Buffer.alloc(this.packetSignatureLength);
+				packetSignature.writeUInt32BE(0x12345678);
+				ack.packetSignature = packetSignature;
+			} else if (this.isDisconnect()) {
+				//as is
+			} else if (this.isPing()) {
+				//TODO hows is packet signature generated?
+			} else {
+				throw new Error(`Unknown packet type ${this.type}`);
+			}
+		} else {
+			throw new Error(`Missing session id in paramter for packet type ${this.type}`);
+		}
+		return ack;
+	}
+
+	/**
+	 * Creates a packet of type syn
+	 * @param {Number} localChannel the channel where this packet originates from
+	 * @param {Number} remoteChannel the channel where this packet is destinated to
+	 * @returns {PRUDPPacketVersion0} the created Packet
+	 */
+	static createSyn(localChannel, remoteChannel) {
+		const syn = new PRUDPPacketVersion0();
+		syn.channels.source = localChannel;
+		syn.channels.destination = remoteChannel;
+		return syn;
+	}
+	
+	/**
+	* 
+	* @param {Buffer} buffer the buffer containing the package
+	* @returns {Boolean} true if the buffer is of type V0; 
+	*/
+	static isBufferVersion0(buffer) {
+		const source = buffer.readUInt8(0);
+		const destination = buffer.readUInt8(1);
+		if(source >= 0xA1 && source <= 0xAF && destination >= 0xA1 && destination <= 0xAF ) 
+			return true;
+		return false;
 	}
 }
 
