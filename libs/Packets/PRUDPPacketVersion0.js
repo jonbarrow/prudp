@@ -130,13 +130,14 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 			sum += buffer.readUInt32LE(i * 4, true);
 		}
 		sum = (sum & 0xFFFFFFFF) >>> 0;
-		key += buffer.subarray(-((length & 3) >>> 0)).reduce((a, b) => {
-			return a + b;
-		}, 0);
+		for(let i = words * 4; i < length; ++i) {
+			key += buffer[i];
+		}
+
 		
 		const buff = Buffer.alloc(4);
 		buff.writeUInt32LE(sum, 0);
-		key += buff.reduce((a, b) => { return a + b; }, 0);
+		key += buff.reduce((a, b) => { return a + b; });
 		
 		return (key & 0xFF) >>> 0;
 	}
