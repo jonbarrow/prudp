@@ -79,6 +79,9 @@ function receivedDatagram(msg, rinfo) {
 			localChannel: this.localChannel,
 			remoteChannel: packet.channels.source
 		}, true);
+		client.once('connected', _client => {
+			this.emit('connection', _client);
+		});
 		this.clients[connect_str] = client;
 		client.setSocket(this.socket, msg, rinfo);
 	}
