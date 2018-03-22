@@ -234,6 +234,10 @@ function sendRawPacket(packet) {
 			this.emit('connected', this);
 			this._state = readyStates.OPEN;
 		}
+		if(packet.isDisconnect() && packet.hasFlagAck() && this._state === readyStates.CLOSING) {
+			this.emit('disconnected');
+			this._state = readyStates.CLOSED;
+		} 
 		if(packet.implementsChecksum)
 			packet.setChecksum(this.accessKey);
 	}
@@ -255,6 +259,10 @@ function handleReceivedAck(packet) {
 		this._state = readyStates.OPEN;
 	}
 	this.congestionWindow.acknowledgePacket(packet);
+	if(packet.isDisconnect()) {
+		this.emit('disconnected');
+		this._state = readyStates.CLOSED;
+	}
 	return true;
 }
 
