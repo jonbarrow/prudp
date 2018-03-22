@@ -91,6 +91,7 @@ class PRUDPCongestionWindow {
 }
 
 class PRUDP extends EventEmitter {
+
 	/**
 	* Creates a prudp client
 	* @param {!String} host The host to connect to
@@ -114,7 +115,7 @@ class PRUDP extends EventEmitter {
 		this.host = host;
 		this.port = port;
 		this.accessKey = accessKey;
-		this.encryptionKey = encryptionKey;
+		this._encryptionKey = encryptionKey;
 		this.localChannel = options.localChannel;
 		this.remoteChannel = options.remoteChannel;
 		this.md5AccessKey = md5.update(this.accessKey).digest();
@@ -197,6 +198,17 @@ class PRUDP extends EventEmitter {
 			sendRawPacket.call(this, packet);
 		}
 	}
+
+	get state() {
+		return this._state;
+	}
+
+	get encryptionKey () {
+		return this._encryptionKey;
+	}
+	set encryptionKey (key) {
+		this._encryptionKey = key;
+	}
 }
 
 /**
@@ -238,6 +250,9 @@ function sendRawPacket(packet) {
 			this.emit('disconnected');
 			this._state = readyStates.CLOSED;
 		} 
+		if(packet.payloadSize > 0) {
+			packet.payload = RC4.encrypt(packet.payload, this._encryptionKey);
+		}
 		if(packet.implementsChecksum)
 			packet.setChecksum(this.accessKey);
 	}
@@ -298,7 +313,7 @@ function handleReceivedPacket(packet){
 		return sendRawPacket.call(this, con);
 	}
 	if(packet.payloadSize > 0) {
-		const decryptedPayload = RC4.decrypt(packet.payload, this.encryptionKey);
+		const decryptedPayload = RC4.decrypt(packet.payload, this._encryptionKey);
 		this.emit('message', decryptedPayload);
 	}
 }
