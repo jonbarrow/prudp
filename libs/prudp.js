@@ -10,6 +10,7 @@ const readyStates = {
 	CLOSED: Symbol('Closed')
 }
 const dgram = require('dgram');
+const RC4 = require('./RC4');
 
 class SentPRUDPPacket { 
 	/**
@@ -167,7 +168,7 @@ class PRUDP extends EventEmitter {
 		//this.socket.bind(9103)
 		if(this._state !== readyStates.CLOSED)
 			return;
-		this.send(this.PRUDPPacket.createSyn(this.localChannel, this.remoteChannel));
+		sendRawPacket.call(this, this.PRUDPPacket.createSyn(this.localChannel, this.remoteChannel));
 	}
 	
 	/**
@@ -183,8 +184,18 @@ class PRUDP extends EventEmitter {
 		receivedDatagram.call(this, initialData, rinfo);
 	}
 
-	send(packet) {
-		sendRawPacket.call(this, packet);
+	/**
+	 * Sends a buffer or string over prudp
+	 * @param {(String|Buffer)} buffer The buffer to be sent over prudp
+	 * @param {?String} inputEnconding if the first argument is a string, what encoding is it in?
+	 */
+	send(packet, inputEncoding) {
+		if(typeof buffer === "string") {
+			buffer = Buffer.from(buffer,inputEncoding);
+		}
+		if(buffer instanceof Buffer){
+			sendRawPacket.call(this, packet);
+		}
 	}
 }
 
@@ -278,7 +289,10 @@ function handleReceivedPacket(packet){
 		const con = this.PRUDPPacket.createConnect(this.localChannel, this.remoteChannel, this.remoteHash, this.otherSideHash);
 		return sendRawPacket.call(this, con);
 	}
-	this.emit('message', packet.payload);
+	if(packet.payloadSize > 0) {
+		const decryptedPayload = RC4.decrypt(packet.payload, this.encryptionKey);
+		this.emit('message', decryptedPayload);
+	}
 }
 
 /**
