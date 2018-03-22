@@ -99,11 +99,11 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 			} else {
 				size = this.payload === null ? 0 : buffer.length;
 			} 
- 			if(size > 0) {
+			if(size > 0) {
 				this.payload.copy(buffer, currentOffset);
 				currentOffset += size;
 			}
-
+			
 		}
 		buffer.writeUInt8(this.checksum, currentOffset++);
 		return buffer.slice(0, currentOffset);
@@ -142,7 +142,6 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 			options = {};
 		}
 		const ack = new PRUDPPacketVersion0();
-		let hasSessionId = options.sessionId != null;
 		ack.setType(this.type);
 		ack.setFlag(PRUDPPacket.FLAGS.ACK);
 		ack.channels.destination = this.channels.source;
@@ -151,7 +150,6 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 		
 		if(this.isSyn()) {
 			ack.setFlag(PRUDPPacket.FLAGS.HAS_SIZE);
-			ack.sessionId = options.sessionId;			
 			if(options.connectionSignature == null) {
 				options.connectionSignature = crypto.randomBytes(this.connectionSignatureLength);
 			}
@@ -159,32 +157,33 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 				throw new Error('Invalid connection signature length');
 			}
 			ack.connectionSignature = options.connectionSignature;
-		} else if(hasSessionId) {
-			ack.sessionId = options.sessionId;			
-			if (this.isConnect()) {
-				ack.setFlag(PRUDPPacket.FLAGS.HAS_SIZE);	
-				if(options.packetSignature == null) {
-					options.packetSignature = crypto.randomBytes(this.packetSignatureLength);
-				}
-				if(options.packetSignature.length !== this.packetSignatureLength) {
-					throw new Error('Invalid packet signature length');
-				}			
-				ack.packetSignature = options.packetSignature;
-			} else if (this.isData()) {
-				ack.setFlag(PRUDPPacket.FLAGS.HAS_SIZE);
-				const packetSignature = Buffer.alloc(this.packetSignatureLength);
-				packetSignature.writeUInt32BE(0x12345678);
-				ack.packetSignature = packetSignature;
-			} else if (this.isDisconnect()) {
-				//as is
-			} else if (this.isPing()) {
-				//TODO hows is packet signature generated?
-			} else {
-				throw new Error(`Unknown packet type ${this.type}`);
+		} 
+		if (this.isConnect()) {
+			ack.setFlag(PRUDPPacket.FLAGS.HAS_SIZE);	
+			if(options.packetSignature == null) {
+				options.packetSignature = crypto.randomBytes(this.packetSignatureLength);
 			}
+			if(options.packetSignature.length !== this.packetSignatureLength) {
+				throw new Error('Invalid packet signature length');
+			}			
+			ack.packetSignature = options.packetSignature;
+		} else if (this.isData()) {
+			ack.setFlag(PRUDPPacket.FLAGS.HAS_SIZE);
+			const packetSignature = Buffer.alloc(this.packetSignatureLength);
+			packetSignature.writeUInt32BE(0x12345678);
+			ack.packetSignature = packetSignature;
+		} else if (this.isDisconnect() || this.isPing()) {
+			if(options.packetSignature == null) {
+				options.packetSignature = crypto.randomBytes(this.packetSignatureLength);
+			}
+			if(this.isPing()) {
+				ack.setFlag(PRUDPPacket.FLAGS.HAS_SIZE);
+			}
+			ack.packetSignature = options.packetSignature;
 		} else {
-			throw new Error(`Missing session id in paramter for packet type ${this.type}`);
+			throw new Error(`Unknown packet type ${this.type}`);
 		}
+		
 		return ack;
 	}
 	
@@ -221,9 +220,45 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 		con.packetSignature = packetSignature;
 		con.connectionSignature = connectionSignature;
 		con.sequenceId = 1;
-		return con
+		return con;
 	}
 	
+	/**
+	* Creates a packet of type connect
+	* @param {Number} localChannel the channel where this packet originates from
+	* @param {Number} remoteChannel the channel where this packet is destinated to
+	* @param {Buffer} connectionSignature
+	* @param {Buffer} packetSignature
+	* @returns {PRUDPPacket} the created Packet
+	*/
+	static createDisconnect(localChannel, remoteChannel, packetSignature) {
+		const disconnect = new PRUDPPacketVersion0();
+		disconnect.setType(PRUDPPacket.TYPES.DISCONNECT);
+		disconnect.setFlag(PRUDPPacket.FLAGS.NEED_ACK);
+		disconnect.setFlag(PRUDPPacket.FLAGS.RELIABLE);
+		disconnect.channels.source = localChannel;
+		disconnect.channels.destination = remoteChannel;	
+		disconnect.packetSignature = packetSignature;
+		return disconnect;
+	}
+	
+	/**
+	* Creates a packet of type ping
+	* @param {Number} localChannel the channel where this packet originates from
+	* @param {Number} remoteChannel the channel where this packet is destinated to
+	* @param {Buffer} packetSignature
+	* @returns {PRUDPPacket} the created Packet
+	*/
+	static createPing(localChannel, remoteChannel, packetSignature) {
+		const disconnect = new PRUDPPacketVersion0();
+		disconnect.setType(PRUDPPacket.TYPES.PING);
+		disconnect.setFlag(PRUDPPacket.FLAGS.NEED_ACK);
+		disconnect.channels.source = localChannel;
+		disconnect.channels.destination = remoteChannel;	
+		disconnect.packetSignature = packetSignature;
+		return disconnect;
+	}
+
 	/**
 	* Checks if the buffer is of version V0
 	* @param {Buffer} buffer the buffer containing the package

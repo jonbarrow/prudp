@@ -178,7 +178,6 @@ class PRUDPPacket {
 	 * @param {Object} options Options for creating a packet
 	 * @param {?Buffer} options.connectionSignature the connection signature for the syn packet ack, if null generate a random signature
 	 * @param {?Buffer} options.packetSignature packet signature for the connect packet ack, if null generate a random signature
-	 * @param {?Number} options.sessionId the sessionID for every packet except SYN
 	 * @returns {PRUDPPacketVersion0} if the packet doesn't have the NeedAck flag returns null
 	 * otherwise returns the created packet
 	 */
@@ -206,6 +205,28 @@ class PRUDPPacket {
 	 * @returns {PRUDPPacket} the created Packet
 	 */
 	static createConnect(localChannel, remoteChannel, connectionSignature, packetSignature ) {
+		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
+	}
+
+	/**
+	* Creates a packet of type disconnect
+	* @param {Number} localChannel the channel where this packet originates from
+	* @param {Number} remoteChannel the channel where this packet is destinated to
+	* @param {Buffer} packetSignature
+	* @returns {PRUDPPacket} the created Packet
+	*/
+	static createDisconnect(localChannel, remoteChannel, packetSignature) {
+		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
+	}
+
+	/**
+	* Creates a packet of type ping
+	* @param {Number} localChannel the channel where this packet originates from
+	* @param {Number} remoteChannel the channel where this packet is destinated to
+	* @param {Buffer} packetSignature
+	* @returns {PRUDPPacket} the created Packet
+	*/
+	static createPing(localChannel, remoteChannel, packetSignature) {
 		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
 	}
 

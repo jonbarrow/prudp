@@ -139,11 +139,24 @@ class PRUDP extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Destroys this purdp client, removes all event listeners and stops receiving packets
+	 */
 	destroy() {
 		this.destroyed = true; //see https://nodejs.org/api/events.html#events_emitter_removelistener_eventname_listener
 		this.removeAllListeners();
 		this.socket.removeListener('message', this.binded);
-		
+	}
+
+	/**
+	 * Disconnects the current prudp client
+	 */
+	disconnect() {
+		if(this._state !== readyStates.OPEN)
+			return;
+		const disco =  this.PRUDPPacket.createDisconnect(this.localChannel, this.remoteChannel, this.other);
+		sendRawPacket.call(this, disco);
+		this._state = readyStates.CLOSING;
 	}
 	
 	/**
@@ -196,6 +209,9 @@ function sendRawPacket(packet) {
 		const ref = setTimeout(packetTimeout.bind(this, packet), this.timeout);
 		this.congestionWindow.replaceTimeoutRef(packet.sequenceId, ref);
 	} else {
+		if(!packet.isSyn()) {
+			packet.sessionId = this.sessionId;
+		}
 		if(!packet.hasFlagAck() && !packet.hasFlagMultiAck()) {
 			packet.sequenceId = this.sequenceId++;
 		}
@@ -237,13 +253,16 @@ function handleReceivedAck(packet) {
 */
 function sendAckForPacket(packet) {
 	const ack = packet.createAck( {
-		sessionId: this.sessionId,
 		connectionSignature: this.remoteHash.slice(0, packet.connectionSignatureLength),
 		packetSignature: this.otherSideHash
 	})
 	if(ack === null)
 		return;
 	sendRawPacket.call(this, ack);
+	if(packet.isDisconnect()) {//Send two more times cuz memetendo
+		sendRawPacket.call(this, ack);
+		sendRawPacket.call(this, ack);
+	}
 }
 
 /**
@@ -259,6 +278,7 @@ function handleReceivedPacket(packet){
 		const con = this.PRUDPPacket.createConnect(this.localChannel, this.remoteChannel, this.remoteHash, this.otherSideHash);
 		return sendRawPacket.call(this, con);
 	}
+	this.emit('message', packet.payload);
 }
 
 /**
