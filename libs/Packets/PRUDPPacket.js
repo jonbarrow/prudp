@@ -15,11 +15,11 @@ const TYPES = {
 	PING: 4
 };
 const FLAGS = {
-	ACK: 1,
-	RELIABLE: 2,
-	NEED_ACK: 4,
-	HAS_SIZE: 8,
-	MULTI_ACK: 200
+	ACK: 0x01,
+	RELIABLE: 0x02,
+	NEED_ACK: 0x04,
+	HAS_SIZE: 0x08,
+	MULTI_ACK: 0x200
 };
 
 /**
