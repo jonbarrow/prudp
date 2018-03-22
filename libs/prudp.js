@@ -118,7 +118,7 @@ class PRUDP extends EventEmitter {
 		this.remoteChannel = options.remoteChannel;
 		this.md5AccessKey = md5.update(this.accessKey).digest();
 		const hmac = crypto.createHmac('sha256', this.md5AccessKey);
-		
+
 		this.remoteHash = hmac.update(`${this.host}:${this.port}`).digest();
 		/**@type {Buffer} */
 		this.otherSideHash = null;
@@ -129,12 +129,21 @@ class PRUDP extends EventEmitter {
 		this.timeout = 1000 * 5;//ms
 		this.sequenceId = 0;
 		this.sessionId = crypto.randomBytes(2).readUInt16LE(0);
+		this.destroyed = false;
 		if(this.version === 0)
-		this.PRUDPPacket = PRUDPPacketVersion0;
+			this.PRUDPPacket = PRUDPPacketVersion0;
 		if(!this.isServer) {
 			this.socket = dgram.createSocket('udp4');
-			this.socket.on('message', receivedDatagram.bind(this));
+			this.binded = receivedDatagram.bind(this);
+			this.socket.on('message', this.binded);
 		}
+	}
+
+	destroy() {
+		this.destroyed = true; //see https://nodejs.org/api/events.html#events_emitter_removelistener_eventname_listener
+		this.removeAllListeners();
+		this.socket.removeListener('message', this.binded);
+		
 	}
 	
 	/**
@@ -156,7 +165,8 @@ class PRUDP extends EventEmitter {
 	 */
 	setSocket(socket, initialData, rinfo) {
 		this.socket = socket;
-		this.socket.on('message', receivedDatagram.bind(this));
+		this.binded = receivedDatagram.bind(this);		
+		this.socket.on('message', this.binded);
 		receivedDatagram.call(this, initialData, rinfo);
 	}
 
@@ -257,6 +267,9 @@ function handleReceivedPacket(packet){
 * @param {Object} rinfo the address info of the received package
 */
 function receivedDatagram(msg, rinfo) {
+	if(this.destroyed) {
+		return;//see https://nodejs.org/api/events.html#events_emitter_removelistener_eventname_listener
+	}
 	if(rinfo.address !== this.host || rinfo.port !== this.port) {
 		return;
 	} 
