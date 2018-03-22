@@ -126,7 +126,7 @@ class PRUDP extends EventEmitter {
 		this.version = options.version;
 		this._state = readyStates.CLOSED; //CLOSED 
 		this.congestionWindow = new PRUDPCongestionWindow(5);
-		this.timeout = 1000 * 10;//ms
+		this.timeout = 1000 * 5;//ms
 		this.sequenceId = 0;
 		this.sessionId = crypto.randomBytes(2).readUInt16LE(0);
 		if(this.version === 0)
@@ -232,8 +232,8 @@ function sendAckForPacket(packet) {
 		packetSignature: this.otherSideHash
 	})
 	if(ack === null)
-	return;
-	this.sendRawPacket(ack);
+		return;
+	sendRawPacket.call(this, ack);
 }
 
 /**
@@ -242,7 +242,7 @@ function sendAckForPacket(packet) {
 */
 function handleReceivedPacket(packet){	
 	if(packet.hasFlagNeedAck() || packet.hasFlagReliable()) {
-		return sendAckForPacket(packet);
+		return sendAckForPacket.call(this, packet);
 	}
 	if(packet.isSyn() && packet.hasFlagAck()) {	//send the connect packet
 		this.otherSideHash = packet.connectionSignature;
