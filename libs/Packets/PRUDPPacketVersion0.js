@@ -158,7 +158,7 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 			}
 			ack.connectionSignature = options.connectionSignature;
 		} 
-		if (this.isConnect()) {
+		else if (this.isConnect()) {
 			ack.setFlag(PRUDPPacket.FLAGS.HAS_SIZE);	
 			if(options.packetSignature == null) {
 				options.packetSignature = crypto.randomBytes(this.packetSignatureLength);
