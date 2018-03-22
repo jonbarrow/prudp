@@ -29,6 +29,7 @@ class PRUDPServer extends EventEmitter {
 		this.localChannel = options.localChannel;
 		this.clients = [];
 		this.socket = dgram.createSocket('udp4');//TODO make this use both ipv4 and 6?
+		this.socket.on('message', receivedDatagram.bind(this));
 	}
 	
 	listen() {
@@ -43,9 +44,7 @@ class PRUDPServer extends EventEmitter {
 * @param {Buffer} msg the buffer of the received payload
 * @param {Object} rinfo the address info of the received package
 */
-function receiveDatagram(msg, rinfo) {
-	console.log(msg)
-	console.log(rinfo)
+function receivedDatagram(msg, rinfo) {
 	/**@type {PRUDPPacket} */
 	let packet = null;
 	//TODO version 1
@@ -61,7 +60,7 @@ function receiveDatagram(msg, rinfo) {
 		return; //Invalid key
 	}
 	if(packet.isSyn() && packet.hasFlagNeedAck()) {
-		const client = new PRUDP(rinfo.host, rinfo.port, this.accessKey, this.encryptionKey, {
+		const client = new PRUDP(rinfo.address, rinfo.port, this.accessKey, this.encryptionKey, {
 			version: this.version,
 			localChannel: this.localChannel,
 			remoteChannel: packet.channels.source
