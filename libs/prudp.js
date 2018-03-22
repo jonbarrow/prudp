@@ -198,7 +198,7 @@ function sendRawPacket(packet) {
 			this._state = readyStates.OPEN;
 		}
 		if(packet.implementsChecksum)
-		packet.setChecksum(this.accessKey);
+			packet.setChecksum(this.accessKey);
 	}
 	
 	this.socket.send(packet.toBuffer(), this.port, this.host);
