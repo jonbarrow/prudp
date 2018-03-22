@@ -1,6 +1,6 @@
 {
   "name": "prudp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A node implementation of prudp protocol, mostly used in nintendo's console",
   "main": "index.js",
   "scripts": {
