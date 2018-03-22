@@ -78,7 +78,7 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 		const type_flags = (this.flags << 4) | this.type;
 		buffer.writeUInt16LE(type_flags, currentOffset);
 		currentOffset += 2;
-		buffer.writeUInt8(this.sessionId, currentOffset++);
+		buffer.writeUInt8((this.sessionId & 0xFF) >>>0, currentOffset++);
 		this.packetSignature.copy(buffer, currentOffset);
 		currentOffset += this.packetSignatureLength;
 		buffer.writeUInt16LE(this.sequenceId, currentOffset);	
@@ -99,8 +99,11 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 			} else {
 				size = this.payload === null ? 0 : buffer.length;
 			} 
-			this.payload.copy(buffer, currentOffset);
-			currentOffset += size;
+ 			if(size > 0) {
+				this.payload.copy(buffer, currentOffset);
+				currentOffset += size;
+			}
+
 		}
 		buffer.writeUInt8(this.checksum, currentOffset++);
 		return buffer.slice(0, currentOffset);
