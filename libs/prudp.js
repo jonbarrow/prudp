@@ -94,30 +94,36 @@ class PRUDP extends EventEmitter {
 	* Creates a prudp client
 	* @param {!String} host The host to connect to
 	* @param {!Number} port The port to connect to in the host
-	* @param {!String} access_key The access key used to create checksum and packet signature
-	* @param {!String} encryption_key The encryption key for the payload
-	* @param {Number} [version=0] The PRUDP protocol version to use
-	* @param {Number} [localChannel=0xAF] The local prudp channel
-	* @param {Number} [remoteChannel=0xA1] The remote prudp channel
-	* @param {?dgram.Socket} socket the socket handled by the server
+	* @param {!String} accessKey The access key used to create checksum and packet signature
+	* @param {!String} encryptionKey The encryption key for the payload
+	* @param {Number} [options.version=0] The PRUDP protocol version to use
+	* @param {Number} [options.localChannel=0xAF] The local prudp channel
+	* @param {Number} [options.remoteChannel=0xA1] The remote prudp channel
+	* @param {Boolean} [options.isServer=false] Was this client created by the server?
 	*/
-	constructor(host, port, access_key, encryption_key, version=0, localChannel=0xAF, remoteChannel=0xA1, socket = null, receivedData) {
+	constructor(host, port, accessKey, encryptionKey, options) {
 		super();
+		options = Object.assign({
+			version: 0,
+			localChannel: 0xAF,
+			remoteChannel: 0xA1,
+			isServer: false
+		}, options);
 		const md5 = crypto.createHash('md5');
 		this.host = host;
 		this.port = port;
-		this.accessKey = access_key;
-		this.encryptionKey = encryption_key;
-		this.localChannel = localChannel;
-		this.remoteChannel = remoteChannel;
+		this.accessKey = accessKey;
+		this.encryptionKey = encryptionKey;
+		this.localChannel = options.localChannel;
+		this.remoteChannel = options.remoteChannel;
 		this.md5AccessKey = md5.update(this.accessKey).digest();
 		const hmac = crypto.createHmac('sha256', this.md5AccessKey);
 		
 		this.remoteHash = hmac.update(`${this.host}:${this.port}`).digest();
 		/**@type {Buffer} */
 		this.otherSideHash = null;
-		this.isServer = socket !== null;
-		this.version = version;
+		this.isServer = options.isServer;
+		this.version = options.version;
 		this._state = readyStates.CLOSED; //CLOSED 
 		this.congestionWindow = new PRUDPCongestionWindow(5);
 		this.timeout = 1000 * 10;//ms
@@ -127,11 +133,8 @@ class PRUDP extends EventEmitter {
 		this.PRUDPPacket = PRUDPPacketVersion0;
 		if(!this.isServer) {
 			this.socket = dgram.createSocket('udp4');
-		} else {
-			this.socket = socket;
-			this._state = readyStates.CONNECTING;
+			this.socket.on('message', receivedDatagram.bind(this));
 		}
-		this.socket.on('message', receivedDatagram.bind(this));
 	}
 	
 	/**
@@ -141,10 +144,22 @@ class PRUDP extends EventEmitter {
 	connect() {
 		//this.socket.bind(9103)
 		if(this._state !== readyStates.CLOSED)
-		return;
+			return;
 		this.send(this.PRUDPPacket.createSyn(this.localChannel, this.remoteChannel));
 	}
 	
+	/**
+	 * Sets the socket info
+	 * @param {dgram.socket} socket the socket where packets come from
+	 * @param {Buffer} initialData the buffer of the received payload
+	 * @param {Object} rinfo the address info of the received package
+	 */
+	setSocket(socket, initialData, rinfo) {
+		this.socket = socket;
+		this.socket.on('message', receivedDatagram.bind(this));
+		receivedDatagram.call(this, initialData, rinfo);
+	}
+
 	send(packet) {
 		sendRawPacket.call(this, packet);
 	}
