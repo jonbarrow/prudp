@@ -148,6 +148,16 @@ class PRUDPPacket {
 	}
 
 	/**
+	 * Checks the checksum of the packet
+	 * @param {(String|Buffer|Number)} key the key used to hash the packet
+	 * @returns {Boolean} true if the checksum matches the calculated checksum
+	 */
+	checkChecksum(key) {
+		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
+	}
+
+
+	/**
 	 * Converts the object to a string(debug/visual)
 	 * @returns {String} The converted string
 	 */
@@ -167,7 +177,7 @@ class PRUDPPacket {
 	 * Creates an ack packet(if necessary) for this packet
 	 * @param {Object} options Options for creating a packet
 	 * @param {?Buffer} options.connectionSignature the connection signature for the syn packet ack, if null generate a random signature
-	 * @param {?Buffer} options.packetSignaturethe packet signature for the connect packet ack, if null generate a random signature
+	 * @param {?Buffer} options.packetSignature packet signature for the connect packet ack, if null generate a random signature
 	 * @param {?Number} options.sessionId the sessionID for every packet except SYN
 	 * @returns {PRUDPPacketVersion0} if the packet doesn't have the NeedAck flag returns null
 	 * otherwise returns the created packet
@@ -178,9 +188,24 @@ class PRUDPPacket {
 
 	/**
 	 * Creates a packet of type syn
+	 * @param {Number} localChannel the channel where this packet originates from
+	 * @param {Number} remoteChannel the channel where this packet is destinated to
 	 * @returns {PRUDPPacket} the created Packet
 	 */
-	static createSyn() {
+	static createSyn(localChannel, remoteChannel) {
+		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
+	}
+
+	
+	/**
+	 * Creates a packet of type connect
+	 * @param {Number} localChannel the channel where this packet originates from
+	 * @param {Number} remoteChannel the channel where this packet is destinated to
+	 * @param {Buffer} connectionSignature
+	 * @param {Buffer} packetSignature
+	 * @returns {PRUDPPacket} the created Packet
+	 */
+	static createConnect(localChannel, remoteChannel, connectionSignature, packetSignature ) {
 		throw new Error('Abstract method please instance a class that extends PRUDPPacket');
 	}
 

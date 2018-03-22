@@ -111,52 +111,30 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 	* @param {(String|Buffer|Number)} key the key used to hash the packet
 	*/
 	setChecksum(key) {
-		let number = 0;
-		if(typeof key === 'string') {
-			key = Buffer.from(key);
-		} 
-		if (key instanceof Buffer) {
-			key = key.reduce((a, b) => { return a + b; });
-		}
-		if(typeof key === 'number') {
-			number = key & 0xFF;
-		} else {
-			throw new Error('Invalid key format to create checksum');
-		}
-		let buffer = this.toBuffer();
-		buffer = buffer.slice(0, buffer.length - 1);
-		const length = buffer.length;
-		const tuple = [];
-		let pos = 0;
-		let sum = 0;
-		const words = Math.floor(length/4);
-		for (let i = 0; i < Math.floor(length/4); i++) {
-			sum += buffer.readUInt32LE(i * 4, true);
-		}
-		sum = (sum & 0xFFFFFFFF) >>> 0;
-		for(let i = words * 4; i < length; ++i) {
-			key += buffer.readUInt8(i);
-		}
-
-		
-		const buff = Buffer.alloc(4);
-		buff.writeUInt32LE(sum, 0);
-		key += buff.reduce((a, b) => { return a + b; });
-		this.checksum = (key & 0xFF) >>> 0;
+		this.checksum = calculateChecksum.call(this, key);
 	}
 	
 	/**
-	 * Creates an ack packet(if necessary) for this packet
-	 * @param {Object} options Options for creating a packet
-	 * @param {?Buffer} options.connectionSignature the connection signature for the syn packet ack, if null generate a random signature
-	 * @param {?Buffer} options.packetSignaturethe packet signature for the connect packet ack, if null generate a random signature
-	 * @param {?Number} options.sessionId the sessionID for every packet except SYN
-	 * @returns {PRUDPPacketVersion0} if the packet doesn't have the NeedAck flag returns null
-	 * otherwise returns the created packet
-	 */
+	* Checks the checksum of the packet
+	* @param {(String|Buffer|Number)} key the key used to hash the packet
+	* @returns {Boolean} true if the checksum matches the calculated checksum
+	*/
+	checkChecksum(key) {
+		return this.checksum === calculateChecksum.call(this, key)
+	}
+	
+	/**
+	* Creates an ack packet(if necessary) for this packet
+	* @param {Object} options Options for creating a packet
+	* @param {?Buffer} options.connectionSignature the connection signature for the syn packet ack, if null generate a random signature
+	* @param {?Buffer} options.packetSignature packet signature for the connect packet ack, if null generate a random signature
+	* @param {?Number} options.sessionId the sessionID for every packet except SYN
+	* @returns {PRUDPPacketVersion0} if the packet doesn't have the NeedAck flag returns null
+	* otherwise returns the created packet
+	*/
 	createAck(options) {
 		if(!this.hasFlagNeedAck())
-			return undefined;
+		return undefined;
 		if (options == null) {
 			options = {};
 		}
@@ -206,22 +184,45 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 		}
 		return ack;
 	}
-
+	
 	/**
-	 * Creates a packet of type syn
-	 * @param {Number} localChannel the channel where this packet originates from
-	 * @param {Number} remoteChannel the channel where this packet is destinated to
-	 * @returns {PRUDPPacketVersion0} the created Packet
-	 */
+	* Creates a packet of type syn
+	* @param {Number} localChannel the channel where this packet originates from
+	* @param {Number} remoteChannel the channel where this packet is destinated to
+	* @returns {PRUDPPacketVersion0} the created Packet
+	*/
 	static createSyn(localChannel, remoteChannel) {
 		const syn = new PRUDPPacketVersion0();
+		syn.setType(PRUDPPacket.TYPES.SYN);
+		syn.setFlag(PRUDPPacket.FLAGS.NEED_ACK);
 		syn.channels.source = localChannel;
 		syn.channels.destination = remoteChannel;
 		return syn;
 	}
 	
 	/**
-	* 
+	* Creates a packet of type connect
+	* @param {Number} localChannel the channel where this packet originates from
+	* @param {Number} remoteChannel the channel where this packet is destinated to
+	* @param {Buffer} connectionSignature
+	* @param {Buffer} packetSignature
+	* @returns {PRUDPPacket} the created Packet
+	*/
+	static createConnect(localChannel, remoteChannel, connectionSignature, packetSignature ) {
+		const con = new PRUDPPacketVersion0();
+		con.setType(PRUDPPacket.TYPES.CONNECT);
+		con.setFlag(PRUDPPacket.FLAGS.NEED_ACK);
+		con.setFlag(PRUDPPacket.FLAGS.RELIABLE);
+		con.channels.source = localChannel;
+		con.channels.destination = remoteChannel;	
+		con.packetSignature = packetSignature;
+		con.connectionSignature = connectionSignature;
+		con.sequenceId = 1;
+		return con
+	}
+	
+	/**
+	* Checks if the buffer is of version V0
 	* @param {Buffer} buffer the buffer containing the package
 	* @returns {Boolean} true if the buffer is of type V0; 
 	*/
@@ -229,9 +230,48 @@ class PRUDPPacketVersion0 extends PRUDPPacket {
 		const source = buffer.readUInt8(0);
 		const destination = buffer.readUInt8(1);
 		if(source >= 0xA0 && source <= 0xAF && destination >= 0xA0 && destination <= 0xAF ) 
-			return true;
+		return true;
 		return false;
 	}
+}
+/**
+* Calculates the checksum of the packet
+* @param {(String|Buffer|Number)} key the key used to hash the packet
+* @returns {Number} the checksum
+*/
+function calculateChecksum(key) {
+	let number = 0;
+	if(typeof key === 'string') {
+		key = Buffer.from(key);
+	} 
+	if (key instanceof Buffer) {
+		key = key.reduce((a, b) => { return a + b; });
+	}
+	if(typeof key === 'number') {
+		number = key & 0xFF;
+	} else {
+		throw new Error('Invalid key format to create checksum');
+	}
+	let buffer = this.toBuffer();
+	buffer = buffer.slice(0, buffer.length - 1);
+	const length = buffer.length;
+	const tuple = [];
+	let pos = 0;
+	let sum = 0;
+	const words = Math.floor(length/4);
+	for (let i = 0; i < Math.floor(length/4); i++) {
+		sum += buffer.readUInt32LE(i * 4, true);
+	}
+	sum = (sum & 0xFFFFFFFF) >>> 0;
+	for(let i = words * 4; i < length; ++i) {
+		key += buffer.readUInt8(i);
+	}
+	
+	
+	const buff = Buffer.alloc(4);
+	buff.writeUInt32LE(sum, 0);
+	key += buff.reduce((a, b) => { return a + b; });
+	return (key & 0xFF) >>> 0;
 }
 
 module.exports = PRUDPPacketVersion0;
